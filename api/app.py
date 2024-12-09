@@ -45,6 +45,13 @@ def filmes_series():
         'data': paginated_data
     })
 
+@app.route('/api/filmes-brutos', methods=['GET'])
+def filmes_brutos():
+    # Carregar dados do JSON do Dropbox
+    data = carregar_dados_json()
+
+    # Retornar todos os filmes no formato bruto
+    return jsonify(data)
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
-  
