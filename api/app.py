@@ -1,57 +1,74 @@
 from flask import Flask, request, jsonify
 import requests
-import json
+import random
 
 app = Flask(__name__)
 
-# URL do arquivo JSON no Dropbox
-dropbox_url = 'https://www.dropbox.com/scl/fi/bkdqz292n71jsr0e2588q/Venus.json?rlkey=eu6wno4weq9glll69la70sml2&st=t80mm3yo&dl=1'
+# URLs de filmes e séries
+url_filmes = "https://cdnbrr.click/player_api.php?username=146301758&password=024295079&action=get_vod_streams"
+url_series = "https://cdnbrr.click/player_api.php?username=146301758&password=024295079&action=get_series"
 
-def carregar_dados_json():
+def obter_dados(url):
     try:
-        # Fazer o download do arquivo JSON
-        response = requests.get(dropbox_url)
+        response = requests.get(url)
         if response.status_code == 200:
-            # Carregar o conteúdo JSON
-            dados = json.loads(response.content)
-            return dados
+            return response.json()
         else:
+            print(f"Erro ao obter dados de {url}: {response.status_code}")
             return []
     except Exception as e:
-        print(f"Erro ao carregar JSON: {e}")
+        print(f"Erro ao fazer requisição para {url}: {e}")
         return []
 
-@app.route('/api/filmes-series', methods=['GET'])
-def filmes_series():
-    # Carregar dados do JSON do Dropbox
-    data = carregar_dados_json()
+@app.route('/api/misturar-filmes-series', methods=['GET'])
+def misturar_filmes_series():
+    filmes = obter_dados(url_filmes)
+    series = obter_dados(url_series)
+    combinados = filmes + series
+    random.shuffle(combinados)
 
-    # Parâmetros de paginação
+    # Paginação
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 25))
-
-    # Cálculo da paginação
     start = (page - 1) * per_page
     end = start + per_page
+    paginated_data = combinados[start:end]
 
-    # Obter a página de dados
-    paginated_data = data[start:end]
+    if not paginated_data:
+        return jsonify({'error': 'Nenhum dado encontrado para esta página.'}), 404
 
-    # Retornar dados paginados
     return jsonify({
         'page': page,
         'per_page': per_page,
-        'total': len(data),
+        'total': len(combinados),
         'data': paginated_data
     })
 
-@app.route('/api/filmes-brutos', methods=['GET'])
-def filmes_brutos():
-    # Carregar dados do JSON do Dropbox
-    data = carregar_dados_json()
+@app.route('/api/pesquisar', methods=['GET'])
+def pesquisar():
+    query = request.args.get('q', '').lower()
+    if not query:
+        return jsonify({'error': 'Por favor, forneça um termo de pesquisa usando o parâmetro "q".'}), 400
 
-    # Retornar todos os filmes no formato bruto
-    return jsonify(data)
+    filmes = obter_dados(url_filmes)
+    series = obter_dados(url_series)
+    combinados = filmes + series
+
+    # Filtrar resultados com base na pesquisa
+    resultados = [item for item in combinados if query in item.get('name', '').lower()]
+
+    if not resultados:
+        return jsonify({'message': 'Nenhum resultado encontrado para a pesquisa.'}), 404
+
+    return jsonify(resultados)
+
+@app.route('/api/dados-brutos', methods=['GET'])
+def dados_brutos():
+    filmes = obter_dados(url_filmes)
+    series = obter_dados(url_series)
+    combinados = filmes + series
+
+    return jsonify(combinados)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
