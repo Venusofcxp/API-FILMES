@@ -5,8 +5,8 @@ import random
 app = Flask(__name__)
 
 # URLs de filmes e séries
-url_filmes = "http://russofv.cc:80/player_api.php?username=612335557&password=156130971&action=get_vod_streams"
-url_series = "http://russofv.cc:80/player_api.php?username=612335557&password=156130971&action=get_series"
+url_filmes = "http://solutta.shop:80/player_api.php?username=angelicasb&password=323334ang&action=get_vod_streams"
+url_series = "http://solutta.shop:80/player_api.php?username=angelicasb&password=323334ang&action=get_series"
 
 def obter_dados(url):
     try:
