@@ -43,7 +43,7 @@ def misturar_filmes_series():
 
     # Paginação
     page = max(1, int(request.args.get('page', 1)))
-    per_page = min(int(request.args.get('per_page', 25)), 100)  # limite máximo de 100
+    per_page = min(int(request.args.get('per_page', 27)), 100)  # limite máximo de 100
     start = (page - 1) * per_page
     end = start + per_page
     paginados = combinados[start:end]
