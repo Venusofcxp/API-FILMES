@@ -2,37 +2,72 @@ from flask import Flask, request, jsonify
 import requests
 import random
 import time
+import threading
 
 app = Flask(__name__)
 
-# Cache simples em memória com timeout
-cache = {
-    "filmes": {"dados": [], "atualizado": 0},
-    "series": {"dados": [], "atualizado": 0}
-}
+session = requests.Session()
+
 CACHE_TIMEOUT = 60  # segundos
 
-# URLs IPTV
-url_filmes = "http://solutta.shop:80/player_api.php?username=881101381017&password=896811296068&action=get_vod_streams"
-url_series = "http://solutta.shop:80/player_api.php?username=881101381017&password=896811296068&action=get_series"
+# Configurações para montar os links
+DOMINIO = "http://solutta.shop:80"
+USUARIO = "881101381017"
+SENHA = "896811296068"
 
-def obter_dados(url, tipo):
-    agora = time.time()
-    if agora - cache[tipo]["atualizado"] > CACHE_TIMEOUT:
+url_filmes = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_streams"
+url_series = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_series"
+url_categorias_filmes = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_categories"
+url_categorias_series = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_series_categories"
+
+# Cache separado para cada tipo
+cache = {
+    "filmes": {"dados": [], "atualizado": 0, "lock": threading.Lock()},
+    "series": {"dados": [], "atualizado": 0, "lock": threading.Lock()},
+    "generos_filmes": {"dados": [], "atualizado": 0, "lock": threading.Lock()},
+    "generos_series": {"dados": [], "atualizado": 0, "lock": threading.Lock()},
+}
+
+def cache_expirado(tipo):
+    return time.time() - cache[tipo]["atualizado"] > CACHE_TIMEOUT
+
+def atualizar_cache_async(tipo, url):
+    def worker():
         try:
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                cache[tipo]["dados"] = response.json()
-                cache[tipo]["atualizado"] = agora
+            resp = session.get(url, timeout=5)
+            if resp.status_code == 200:
+                with cache[tipo]["lock"]:
+                    cache[tipo]["dados"] = resp.json()
+                    cache[tipo]["atualizado"] = time.time()
             else:
-                print(f"[ERRO] Código {response.status_code} para {tipo}")
+                print(f"[ERRO] Código {resp.status_code} ao atualizar cache de {tipo}")
         except Exception as e:
-            print(f"[ERRO] Exceção ao buscar {tipo}: {e}")
-    return cache[tipo]["dados"]
+            print(f"[ERRO] Exceção ao atualizar cache de {tipo}: {e}")
+
+    thread = threading.Thread(target=worker)
+    thread.daemon = True
+    thread.start()
+
+def obter_cache(tipo, url):
+    with cache[tipo]["lock"]:
+        if cache_expirado(tipo):
+            # Atualiza cache assincronamente
+            atualizar_cache_async(tipo, url)
+        # Retorna o dado atual (mesmo que possa estar expirado, evita bloqueio)
+        return cache[tipo]["dados"]
+
+def limpar_dados(lista, tipo):
+    campos_permitidos = ['name', 'stream_id', 'stream_type', 'rating']
+    dados_limpos = []
+    for item in lista:
+        novo = {k: item.get(k) for k in campos_permitidos if k in item}
+        novo["tipo"] = tipo
+        dados_limpos.append(novo)
+    return dados_limpos
 
 def obter_combinados():
-    filmes = obter_dados(url_filmes, "filmes")
-    series = obter_dados(url_series, "series")
+    filmes = limpar_dados(obter_cache("filmes", url_filmes), "filme")
+    series = limpar_dados(obter_cache("series", url_series), "serie")
     combinados = filmes + series
     random.shuffle(combinados)
     return combinados
@@ -41,9 +76,8 @@ def obter_combinados():
 def misturar_filmes_series():
     combinados = obter_combinados()
 
-    # Paginação
     page = max(1, int(request.args.get('page', 1)))
-    per_page = min(int(request.args.get('per_page', 27)), 100)  # limite máximo de 100
+    per_page = min(int(request.args.get('per_page', 27)), 100)
     start = (page - 1) * per_page
     end = start + per_page
     paginados = combinados[start:end]
@@ -74,8 +108,25 @@ def pesquisar():
 
 @app.route('/api/dados-brutos', methods=['GET'])
 def dados_brutos():
-    combinados = obter_combinados()
-    return jsonify(combinados)
+    return jsonify(obter_combinados())
+
+@app.route('/api/generos', methods=['GET'])
+def generos():
+    # Para gêneros filmes
+    generos_filmes = obter_cache("generos_filmes", url_categorias_filmes)
+    generos_series = obter_cache("generos_series", url_categorias_series)
+
+    if not generos_filmes or not generos_series:
+        return jsonify({'error': 'Erro ao obter os gêneros'}), 500
+
+    return jsonify({
+        'filmes': generos_filmes,
+        'series': generos_series
+    })
+
+@app.errorhandler(500)
+def erro_interno(e):
+    return jsonify({'error': 'Erro interno no servidor'}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
