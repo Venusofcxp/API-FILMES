@@ -112,17 +112,26 @@ def dados_brutos():
 
 @app.route('/api/generos', methods=['GET'])
 def generos():
-    # Para gêneros filmes
     generos_filmes = obter_cache("generos_filmes", url_categorias_filmes)
     generos_series = obter_cache("generos_series", url_categorias_series)
 
     if not generos_filmes or not generos_series:
         return jsonify({'error': 'Erro ao obter os gêneros'}), 500
 
-    return jsonify({
-        'filmes': generos_filmes,
-        'series': generos_series
-    })
+    # Combina as listas
+    todos_generos = generos_filmes + generos_series
+
+    # Remove duplicados por category_name
+    generos_unicos = {}
+    for genero in todos_generos:
+        nome = genero.get("category_name")
+        if nome and nome not in generos_unicos:
+            generos_unicos[nome] = genero
+
+    # Ordena alfabeticamente pelo nome do gênero
+    generos_ordenados = sorted(generos_unicos.values(), key=lambda g: g.get("category_name", "").lower())
+
+    return jsonify(generos_ordenados)
 
 @app.errorhandler(500)
 def erro_interno(e):
