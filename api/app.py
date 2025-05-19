@@ -119,7 +119,7 @@ def misturar_filmes_series():
     random.shuffle(combinados)
 
     page = int(request.args.get('page', 1))
-    per_page = int(request.args.get('per_page', 25))
+    per_page = int(request.args.get('per_page', 27))
     start = (page - 1) * per_page
     end = start + per_page
     paginated_data = combinados[start:end]
