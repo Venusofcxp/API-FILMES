@@ -6,7 +6,7 @@ import time
 app = Flask(__name__)
 
 # Configuração
-DOMINIO = "https://hiveos.site"
+DOMINIO = "http://hiveos.space"
 USUARIO = "219886848"
 SENHA = "248454967"
 
