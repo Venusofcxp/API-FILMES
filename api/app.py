@@ -7,8 +7,8 @@ app = Flask(__name__)
 
 # Configuração
 DOMINIO = "https://hiveos.site"
-USUARIO = "649791548"
-SENHA = "221302218"
+USUARIO = "219886848"
+SENHA = "248454967"
 
 # URLs
 URLS = {
