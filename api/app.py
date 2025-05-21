@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import requests
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 
@@ -73,6 +74,22 @@ def filtrar_conteudo_adulto(lista):
         if not any(proibido in item.get('category_name', '').lower() for proibido in GENERO_PROIBIDO)
     ]
 
+def obter_multiplos_dados():
+    with ThreadPoolExecutor() as executor:
+        f1 = executor.submit(lambda: filtrar_conteudo_adulto(obter_dados_cache("filmes", URLS["filmes"])))
+        f2 = executor.submit(lambda: filtrar_conteudo_adulto(obter_dados_cache("series", URLS["series"])))
+        return f1.result(), f2.result()
+
+@app.before_first_request
+def carregar_cache_inicial():
+    for nome, url in URLS.items():
+        obter_dados_cache(nome, url)
+
+@app.after_request
+def adicionar_cabecalhos(response):
+    response.headers['Cache-Control'] = 'public, max-age=60'
+    return response
+
 @app.route('/api/generos', methods=['GET'])
 def listar_generos():
     categorias_filmes = obter_dados_cache("categorias_filmes", URLS["categorias_filmes"])
@@ -96,8 +113,7 @@ def listar_generos():
 
 @app.route('/api/misturar-filmes-series', methods=['GET'])
 def misturar_filmes_series():
-    filmes = filtrar_conteudo_adulto(obter_dados_cache("filmes", URLS["filmes"]))
-    series = filtrar_conteudo_adulto(obter_dados_cache("series", URLS["series"]))
+    filmes, series = obter_multiplos_dados()
     combinados = filmes + series
     random.shuffle(combinados)
 
@@ -123,8 +139,7 @@ def pesquisar():
     if not query:
         return jsonify({'error': 'Forneça um termo usando "q".'}), 400
 
-    filmes = filtrar_conteudo_adulto(obter_dados_cache("filmes", URLS["filmes"]))
-    series = filtrar_conteudo_adulto(obter_dados_cache("series", URLS["series"]))
+    filmes, series = obter_multiplos_dados()
     combinados = filmes + series
 
     resultados = [item for item in combinados if query in item.get('name', '').lower()]
@@ -135,9 +150,8 @@ def pesquisar():
 
 @app.route('/api/dados-brutos', methods=['GET'])
 def dados_brutos():
-    filmes = filtrar_conteudo_adulto(obter_dados_cache("filmes", URLS["filmes"]))
-    series = filtrar_conteudo_adulto(obter_dados_cache("series", URLS["series"]))
+    filmes, series = obter_multiplos_dados()
     return jsonify(filmes + series)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
