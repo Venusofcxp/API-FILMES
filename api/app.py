@@ -5,9 +5,9 @@ import random
 app = Flask(__name__)
 
 # Configurações
-DOMINIO = "https://hiveos.site"
-USUARIO = "649791548"
-SENHA = "221302218"
+DOMINIO = "https://hiveos.space"
+USUARIO = "VenusPlay"
+SENHA = "659225573"
 
 url_filmes = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_streams"
 url_series = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&password={SENHA}&action=get_series"
