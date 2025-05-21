@@ -1,55 +1,65 @@
 from flask import Flask, request, jsonify
 import requests
 import random
-import time
-from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 
-# Configuração
-DOMINIO = "https://hiveos.space"
-USUARIO = "VenusPlay"
-SENHA = "659225573"
+# Configurações
+DOMINIO = "https://hiveos.site"
+USUARIO = "649791548"
+SENHA = "221302218"
 
-# URLs
-URLS = {
-    "filmes": f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_streams",
-    "series": f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_series",
-    "categorias_filmes": f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_categories",
-    "categorias_series": f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_series_categories"
-}
+url_filmes = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_streams"
+url_series = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&password={SENHA}&action=get_series"
 
+url_categorias_filmes = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_categories"
+url_categorias_series = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_series_categories"
+
+# Gêneros proibidos
 GENERO_PROIBIDO = ["xxx adultos", "xxx onlyfans"]
 
+# Mapeamento de emojis
 EMOJI_GENEROS = {
-    "lançamentos": "🔄", "4k": "📺", "ação": "🔥", "aventura": "🗺️", "animes": "🎌",
-    "animação": "🐭", "infantil": "🧸", "marvel": "🦸‍♂️", "dc": "🦸‍♀️", "guerra": "⚔️",
-    "faroeste": "🤠", "nacionais": "🇧🇷", "religiosos": "🙏", "romance": "❤️",
-    "suspense": "🕵️", "terror": "👻", "fantasia": "🧙", "ficção": "🚀",
-    "família": "👨‍👩‍👧‍👦", "especial de natal": "🎄", "cinema": "🎥", "crime": "🕵️‍♂️",
-    "comédia": "😂", "documentários": "📚", "drama": "🎭", "legendados": "🔤",
-    "shows": "🎤", "rock in rio": "🎸"
+    "lançamentos": "🔄",
+    "4k": "📺",
+    "ação": "🔥",
+    "aventura": "🗺️",
+    "animes": "🎌",
+    "animação": "🐭",
+    "infantil": "🧸",
+    "marvel": "🦸‍♂️",
+    "dc": "🦸‍♀️",
+    "guerra": "⚔️",
+    "faroeste": "🤠",
+    "nacionais": "🇧🇷",
+    "religiosos": "🙏",
+    "romance": "❤️",
+    "suspense": "🕵️",
+    "terror": "👻",
+    "fantasia": "🧙",
+    "ficção": "🚀",
+    "família": "👨‍👩‍👧‍👦",
+    "especial de natal": "🎄",
+    "cinema": "🎥",
+    "crime": "🕵️‍♂️",
+    "comédia": "😂",
+    "documentários": "📚",
+    "drama": "🎭",
+    "legendados": "🔤",
+    "shows": "🎤",
+    "rock in rio": "🎸"
 }
 
-# Cache com expiração
-CACHE = {}
-CACHE_EXPIRACAO = 300  # segundos
-
-def obter_dados_cache(nome, url):
-    agora = time.time()
-    if nome in CACHE and (agora - CACHE[nome]['timestamp']) < CACHE_EXPIRACAO:
-        return CACHE[nome]['dados']
+def obter_dados(url):
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url)
         if response.status_code == 200:
-            dados = response.json()
-            CACHE[nome] = {"dados": dados, "timestamp": agora}
-            return dados
+            return response.json()
         else:
             print(f"Erro ao obter dados de {url}: {response.status_code}")
             return []
     except Exception as e:
-        print(f"Erro ao requisitar {url}: {e}")
+        print(f"Erro ao fazer requisição para {url}: {e}")
         return []
 
 def limpar_nome_genero(nome_original):
@@ -59,61 +69,52 @@ def limpar_nome_genero(nome_original):
         parte = nome_original
 
     parte_minuscula = parte.lower()
+
     for proibido in GENERO_PROIBIDO:
         if proibido in parte_minuscula:
-            return None
+            return None  # Gênero proibido
 
-    for chave, emoji in EMOJI_GENEROS.items():
+    emoji = ""
+    for chave, val in EMOJI_GENEROS.items():
         if chave in parte_minuscula:
-            return f"{emoji} {parte}"
-    return parte
+            emoji = val
+            break
 
-def filtrar_conteudo_adulto(lista):
-    return [
-        item for item in lista
-        if not any(proibido in item.get('category_name', '').lower() for proibido in GENERO_PROIBIDO)
-    ]
-
-def obter_multiplos_dados():
-    with ThreadPoolExecutor() as executor:
-        f1 = executor.submit(lambda: filtrar_conteudo_adulto(obter_dados_cache("filmes", URLS["filmes"])))
-        f2 = executor.submit(lambda: filtrar_conteudo_adulto(obter_dados_cache("series", URLS["series"])))
-        return f1.result(), f2.result()
-
-@app.before_first_request
-def carregar_cache_inicial():
-    for nome, url in URLS.items():
-        obter_dados_cache(nome, url)
-
-@app.after_request
-def adicionar_cabecalhos(response):
-    response.headers['Cache-Control'] = 'public, max-age=60'
-    return response
+    return f"{emoji} {parte}" if emoji else parte
 
 @app.route('/api/generos', methods=['GET'])
 def listar_generos():
-    categorias_filmes = obter_dados_cache("categorias_filmes", URLS["categorias_filmes"])
-    categorias_series = obter_dados_cache("categorias_series", URLS["categorias_series"])
+    categorias_filmes = obter_dados(url_categorias_filmes)
+    categorias_series = obter_dados(url_categorias_series)
 
-    todas = categorias_filmes + categorias_series
+    todas_categorias = categorias_filmes + categorias_series
+    categorias_unicas = {}
     nomes_vistos = set()
-    categorias_unicas = []
 
-    for cat in todas:
+    for cat in todas_categorias:
         nome_genero = limpar_nome_genero(cat.get('category_name', ''))
         if nome_genero and nome_genero not in nomes_vistos:
             nomes_vistos.add(nome_genero)
-            categorias_unicas.append({
+            categorias_unicas[cat['category_id']] = {
                 "category_id": cat['category_id'],
                 "category_name": nome_genero,
                 "parent_id": cat.get('parent_id', 0)
-            })
+            }
 
-    return jsonify(categorias_unicas)
+    return jsonify(list(categorias_unicas.values()))
+
+def filtrar_conteudo_adulto(lista):
+    filtrada = []
+    for item in lista:
+        categoria_name = item.get('category_name', '').lower()
+        if not any(proibido in categoria_name for proibido in GENERO_PROIBIDO):
+            filtrada.append(item)
+    return filtrada
 
 @app.route('/api/misturar-filmes-series', methods=['GET'])
 def misturar_filmes_series():
-    filmes, series = obter_multiplos_dados()
+    filmes = filtrar_conteudo_adulto(obter_dados(url_filmes))
+    series = filtrar_conteudo_adulto(obter_dados(url_series))
     combinados = filmes + series
     random.shuffle(combinados)
 
@@ -137,21 +138,25 @@ def misturar_filmes_series():
 def pesquisar():
     query = request.args.get('q', '').lower()
     if not query:
-        return jsonify({'error': 'Forneça um termo usando "q".'}), 400
+        return jsonify({'error': 'Por favor, forneça um termo de pesquisa usando o parâmetro "q".'}), 400
 
-    filmes, series = obter_multiplos_dados()
+    filmes = filtrar_conteudo_adulto(obter_dados(url_filmes))
+    series = filtrar_conteudo_adulto(obter_dados(url_series))
     combinados = filmes + series
 
     resultados = [item for item in combinados if query in item.get('name', '').lower()]
+
     if not resultados:
-        return jsonify({'message': 'Nenhum resultado encontrado.'}), 404
+        return jsonify({'message': 'Nenhum resultado encontrado para a pesquisa.'}), 404
 
     return jsonify(resultados)
 
 @app.route('/api/dados-brutos', methods=['GET'])
 def dados_brutos():
-    filmes, series = obter_multiplos_dados()
-    return jsonify(filmes + series)
+    filmes = filtrar_conteudo_adulto(obter_dados(url_filmes))
+    series = filtrar_conteudo_adulto(obter_dados(url_series))
+    combinados = filmes + series
+    return jsonify(combinados)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
