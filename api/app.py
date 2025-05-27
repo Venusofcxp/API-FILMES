@@ -1,6 +1,9 @@
 from flask import Flask, request, jsonify
 import requests
 import random
+from cachetools import TTLCache
+from functools import wraps
+import time
 
 app = Flask(__name__)
 
@@ -9,45 +12,60 @@ DOMINIO = "https://hiveos.space"
 USUARIO = "VenusPlay"
 SENHA = "659225573"
 
-url_filmes = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_streams"
-url_series = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_series"
+# Endpoints da API IPTV
+URLS = {
+    "filmes": f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_streams",
+    "series": f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_series",
+    "categorias_filmes": f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_categories",
+    "categorias_series": f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_series_categories"
+}
 
-url_categorias_filmes = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_categories"
-url_categorias_series = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_series_categories"
+# Cache de 300 segundos (5 minutos) para cada requisição externa
+cache = TTLCache(maxsize=100, ttl=300)
 
 # Gêneros proibidos
 GENERO_PROIBIDO = ["xxx adultos", "xxx onlyfans"]
 
+# Decorador para cache de função
+def cache_data(func):
+    @wraps(func)
+    def wrapper(url):
+        if url in cache:
+            return cache[url]
+        result = func(url)
+        cache[url] = result
+        return result
+    return wrapper
+
+@cache_data
 def obter_dados(url):
     try:
-        response = requests.get(url)
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"Erro ao obter dados de {url}: {response.status_code}")
-            return []
+        response = requests.get(url, timeout=5)
+        response.raise_for_status()
+        return response.json()
     except Exception as e:
-        print(f"Erro ao fazer requisição para {url}: {e}")
+        print(f"[ERRO] Falha ao requisitar {url}: {e}")
         return []
 
 def limpar_nome_genero(nome_original):
-    if "|" in nome_original:
-        parte = nome_original.split("|")[1].strip()
-    else:
-        parte = nome_original
-
+    parte = nome_original.split("|")[1].strip() if "|" in nome_original else nome_original
     parte_minuscula = parte.lower()
 
     for proibido in GENERO_PROIBIDO:
         if proibido in parte_minuscula:
-            return None  # Gênero proibido
+            return None
+    return parte
 
-    return parte  # Apenas retorna a parte limpa, sem emoji
+def filtrar_conteudo_adulto(lista):
+    return [
+        item for item in lista
+        if not any(proibido in item.get('category_name', '').lower() for proibido in GENERO_PROIBIDO)
+    ]
 
-@app.route('/api/generos', methods=['GET'])
+@app.route('/api/venus/generos', methods=['GET'])
 def listar_generos():
-    categorias_filmes = obter_dados(url_categorias_filmes)
-    categorias_series = obter_dados(url_categorias_series)
+    categorias_filmes = obter_dados(URLS["categorias_filmes"])
+    categorias_series = obter_dados(URLS["categorias_series"])
 
     todas_categorias = categorias_filmes + categorias_series
     categorias_unicas = {}
@@ -65,18 +83,10 @@ def listar_generos():
 
     return jsonify(list(categorias_unicas.values()))
 
-def filtrar_conteudo_adulto(lista):
-    filtrada = []
-    for item in lista:
-        categoria_name = item.get('category_name', '').lower()
-        if not any(proibido in categoria_name for proibido in GENERO_PROIBIDO):
-            filtrada.append(item)
-    return filtrada
-
-@app.route('/api/misturar-filmes-series', methods=['GET'])
+@app.route('/api/venusplay/page', methods=['GET'])
 def misturar_filmes_series():
-    filmes = filtrar_conteudo_adulto(obter_dados(url_filmes))
-    series = filtrar_conteudo_adulto(obter_dados(url_series))
+    filmes = filtrar_conteudo_adulto(obter_dados(URLS["filmes"]))
+    series = filtrar_conteudo_adulto(obter_dados(URLS["series"]))
     combinados = filmes + series
     random.shuffle(combinados)
 
@@ -96,14 +106,14 @@ def misturar_filmes_series():
         'data': paginated_data
     })
 
-@app.route('/api/pesquisar', methods=['GET'])
+@app.route('/api/venusplay/pesquisar', methods=['GET'])
 def pesquisar():
-    query = request.args.get('q', '').lower()
+    query = request.args.get('q', '').strip().lower()
     if not query:
         return jsonify({'error': 'Por favor, forneça um termo de pesquisa usando o parâmetro "q".'}), 400
 
-    filmes = filtrar_conteudo_adulto(obter_dados(url_filmes))
-    series = filtrar_conteudo_adulto(obter_dados(url_series))
+    filmes = filtrar_conteudo_adulto(obter_dados(URLS["filmes"]))
+    series = filtrar_conteudo_adulto(obter_dados(URLS["series"]))
     combinados = filmes + series
 
     resultados = [item for item in combinados if query in item.get('name', '').lower()]
@@ -113,12 +123,12 @@ def pesquisar():
 
     return jsonify(resultados)
 
-@app.route('/api/dados-brutos', methods=['GET'])
+@app.route('/api/venusplay/todos', methods=['GET'])
 def dados_brutos():
-    filmes = filtrar_conteudo_adulto(obter_dados(url_filmes))
-    series = filtrar_conteudo_adulto(obter_dados(url_series))
+    filmes = filtrar_conteudo_adulto(obter_dados(URLS["filmes"]))
+    series = filtrar_conteudo_adulto(obter_dados(URLS["series"]))
     combinados = filmes + series
     return jsonify(combinados)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
