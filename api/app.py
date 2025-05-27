@@ -10,45 +10,13 @@ USUARIO = "VenusPlay"
 SENHA = "659225573"
 
 url_filmes = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_streams"
-url_series = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&password={SENHA}&action=get_series"
+url_series = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_series"
 
 url_categorias_filmes = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_vod_categories"
 url_categorias_series = f"{DOMINIO}/player_api.php?username={USUARIO}&password={SENHA}&action=get_series_categories"
 
 # Gêneros proibidos
 GENERO_PROIBIDO = ["xxx adultos", "xxx onlyfans"]
-
-# Mapeamento de emojis
-EMOJI_GENEROS = {
-    "lançamentos": "🔄",
-    "4k": "📺",
-    "ação": "🔥",
-    "aventura": "🗺️",
-    "animes": "🎌",
-    "animação": "🐭",
-    "infantil": "🧸",
-    "marvel": "🦸‍♂️",
-    "dc": "🦸‍♀️",
-    "guerra": "⚔️",
-    "faroeste": "🤠",
-    "nacionais": "🇧🇷",
-    "religiosos": "🙏",
-    "romance": "❤️",
-    "suspense": "🕵️",
-    "terror": "👻",
-    "fantasia": "🧙",
-    "ficção": "🚀",
-    "família": "👨‍👩‍👧‍👦",
-    "especial de natal": "🎄",
-    "cinema": "🎥",
-    "crime": "🕵️‍♂️",
-    "comédia": "😂",
-    "documentários": "📚",
-    "drama": "🎭",
-    "legendados": "🔤",
-    "shows": "🎤",
-    "rock in rio": "🎸"
-}
 
 def obter_dados(url):
     try:
@@ -74,13 +42,7 @@ def limpar_nome_genero(nome_original):
         if proibido in parte_minuscula:
             return None  # Gênero proibido
 
-    emoji = ""
-    for chave, val in EMOJI_GENEROS.items():
-        if chave in parte_minuscula:
-            emoji = val
-            break
-
-    return f"{emoji} {parte}" if emoji else parte
+    return parte  # Apenas retorna a parte limpa, sem emoji
 
 @app.route('/api/generos', methods=['GET'])
 def listar_generos():
