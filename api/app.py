@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 # URLs de filmes e séries
 url_filmes = "https://hiveos.space/player_api.php?username=VenusPlay&password=659225573&action=get_vod_streams"
-url_series = "http://VenusPlay/player_api.php?username=VenusPlay&password=659225573&action=get_series"
+url_series = "https://hiveos.site/player_api.php?username=VenusPlay&password=659225573&action=get_series"
 
 def obter_dados(url):
     try:
